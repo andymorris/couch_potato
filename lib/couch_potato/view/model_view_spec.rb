@@ -123,7 +123,11 @@ module CouchPotato
         end
       end
 
-      delegate :map_function, :map_body, :formatted_key, :to => :generator
+      delegate :map_body, :formatted_key, :to => :generator
+
+      def map_function
+        options[:map] || generator.map_function
+      end
 
       def view_parameters
         _super = super

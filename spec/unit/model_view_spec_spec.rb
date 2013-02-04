@@ -24,6 +24,11 @@ describe CouchPotato::View::ModelViewSpec, '#process_results' do
 end
 
 describe CouchPotato::View::ModelViewSpec, '#map_function' do
+  it "uses the given map function if one is given" do
+    spec = CouchPotato::View::ModelViewSpec.new Object, 'all', {:map => "custom map"}, {}
+    spec.map_function.should == "custom map"
+  end
+
   it "should include conditions" do
     spec = CouchPotato::View::ModelViewSpec.new Object, 'all', {:conditions => 'doc.closed = true'}, {}
     spec.map_function.should include('if(doc.ruby_class && doc.ruby_class == \'Object\' && (doc.closed = true))')

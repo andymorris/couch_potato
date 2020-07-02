@@ -1,11 +1,7 @@
 begin
-  require 'v8'
+  require 'execjs'
 rescue LoadError
-  begin
-    require 'rhino'
-  rescue LoadError
-    STDERR.puts "You need to install therubyracer (or therhinoracer on jruby) to use matchers"
-  end
+  STDERR.puts "You need to install execjs to use matchers"
 end
 
 module CouchPotato
@@ -14,11 +10,7 @@ module CouchPotato
       private
 
       def run_js(js)
-        if defined?(V8)
-          V8::Context.new.eval(js)
-        else
-          Rhino::Context.open{|cxt| cxt.eval(js)}
-        end
+        ExecJS.exec(js)
       end
     end
   end

@@ -32,7 +32,7 @@ module CouchPotato
             listed = listed + text;
           };
           list();
-          JSON.stringify(JSON.parse(listed));
+          return JSON.stringify(JSON.parse(listed));
         JS
 
         @actual_ruby = JSON.parse(run_js(js))

@@ -30,7 +30,7 @@ module CouchPotato
           var keys = #{@keys.to_json};
           var values = #{@values.to_json};
           var reduce = #{view_spec.reduce_function};
-          JSON.stringify({result: reduce(keys, values, #{@rereduce})});
+          return JSON.stringify({result: reduce(keys, values, #{@rereduce})});
         JS
         @actual_ruby = JSON.parse(run_js(js))['result']
         @expected_ruby == @actual_ruby

@@ -19,6 +19,7 @@ Gem::Specification.new do |s|
   s.add_development_dependency 'timecop'
   s.add_development_dependency 'tzinfo'
   s.add_development_dependency 'rake'
+  s.add_development_dependency 'execjs'
 
   s.files         = `git ls-files | grep -v "lib/couch_potato/rspec"`.split("\n")
   s.test_files    = `git ls-files -- {test,spec,features}/* | grep -v rspec_matchers`.split("\n")

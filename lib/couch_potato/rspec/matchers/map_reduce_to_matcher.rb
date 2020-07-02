@@ -184,7 +184,7 @@ module CouchPotato
             results.push({key: group.groupedKey, value: reduced});
           }
 
-          JSON.stringify(results);
+          return JSON.stringify(results);
         JS
         @actual_ruby = JSON.parse(run_js(js))
         @expected_ruby == @actual_ruby

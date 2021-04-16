@@ -11,6 +11,25 @@ module Parent
   end
 end
 
+class Category
+  include CouchPotato::Persistence
+  property :name
+  validates_presence_of :name
+end
+
+class Vulcan
+  include CouchPotato::Persistence
+  before_validation_on_create :set_errors
+  before_validation_on_update :set_errors
+
+  property :name
+  validates_presence_of :name
+
+  def set_errors
+    errors.add(:validation, "failed")
+  end
+end
+
 describe CouchPotato::Database, 'full_url_to_database' do
   before(:all) do
     @database_url = CouchPotato::Config.database_name
@@ -157,12 +176,6 @@ describe CouchPotato::Database, 'save_document' do
     @db.save_document user
   end
 
-  class Category
-    include CouchPotato::Persistence
-    property :name
-    validates_presence_of :name
-  end
-
   it "should return false when creating a new document and the validations failed" do
     expect(CouchPotato.database.save_document(Category.new)).to eq(false)
   end
@@ -225,19 +238,6 @@ describe CouchPotato::Database, 'save_document' do
   end
 
   describe "when saving documents with errors set in callbacks" do
-    class Vulcan
-      include CouchPotato::Persistence
-      before_validation_on_create :set_errors
-      before_validation_on_update :set_errors
-
-      property :name
-      validates_presence_of :name
-
-      def set_errors
-        errors.add(:validation, "failed")
-      end
-    end
-
     it "should keep errors added in before_validation_on_* callbacks when creating a new object" do
       spock = Vulcan.new(:name => 'spock')
       @db.save_document(spock)
@@ -282,6 +282,101 @@ describe CouchPotato::Database, 'save_document' do
       expect(spock.errors[:name]).to eq([])
     end
 
+  end
+end
+
+describe CouchPotato::Database, 'bulk_save' do
+  before(:each) do
+    @db = CouchPotato::Database.new(double('couchrest db').as_null_object)
+  end
+
+  describe "with validate option" do
+    let(:valid) { Category.new(:name => "pizza") }
+    let(:invalid) { Category.new }
+
+    it "should return false if any validations fail" do
+      expect(@db.couchrest_database).not_to receive(:bulk_save)
+      expect(CouchPotato.database.bulk_save([valid, invalid], true)).to eq(false)
+      expect(CouchPotato.database.bulk_save([invalid, valid], true)).to eq(false)
+    end
+
+    it "should return false if any validations fail and validate is defaulted" do
+      expect(@db.couchrest_database).not_to receive(:bulk_save)
+      expect(CouchPotato.database.bulk_save([valid, invalid])).to eq(false)
+      expect(CouchPotato.database.bulk_save([invalid, valid])).to eq(false)
+    end
+  end
+
+  describe "when saving documents with errors set in callbacks" do
+    let(:spock) { Vulcan.new(:name => 'spock') }
+    let(:no_name) { Vulcan.new }
+
+    it "should keep errors added in before_validation_on_* callbacks when creating a new object" do
+      expect(@db.couchrest_database).not_to receive(:bulk_save)
+      @db.bulk_save([spock, no_name])
+      expect(spock.errors[:validation]).to eq(['failed'])
+    end
+
+    it "should keep errors generated from normal validations together with errors set in normal validations" do
+      @db.bulk_save([no_name])
+      expect(no_name.errors[:validation]).to eq(['failed'])
+      expect(no_name.errors[:name].first).to match(/can't be (empty|blank)/)
+    end
+
+    it "should clear errors on subsequent, valid saves when creating" do
+      @db.bulk_save([no_name])
+      expect(no_name.errors[:name]).to_not be_blank
+
+      no_name.name = 'Spock'
+      @db.bulk_save([no_name])
+      expect(no_name.errors[:name]).to eq([])
+    end
+
+    it "should clear errors on subsequent, valid saves when updating" do
+      @db.bulk_save([spock])
+      expect(spock.errors[:name]).to eq([])
+
+      spock.name = nil
+      @db.bulk_save([spock])
+      expect(spock.errors[:name].first).to match(/can't be (empty|blank)/)
+
+      spock.name = 'Spock'
+      @db.bulk_save([spock])
+      expect(spock.errors[:name]).to eq([])
+    end
+  end
+
+  it "should skip validations if validate is false" do
+    invalid = Vulcan.new
+    expect(@db.couchrest_database).to receive(:bulk_save)
+    @db.bulk_save([invalid], false)
+    expect(invalid.errors[:name]).to eq([])
+  end
+
+  it "should only save dirty documents" do
+    c1 = Category.new
+    c2 = Category.new
+    c2.is_dirty
+    expect(@db.couchrest_database).to receive(:bulk_save).with([c2])
+    @db.bulk_save([c1, c2], false)
+  end
+
+  it "should update the _rev on documents that successfully save and return the couchdb result" do
+    c1 = Category.new(_id: "c1", _rev: "1-aaa")
+    c1.is_dirty
+    c2 = Category.new(_id: "c2", _rev: "1-bbb")
+    c2.is_dirty
+    docs = [c1, c2]
+    result = [
+      {"id" => "c1", "ok" => true, "rev" => "2-ccc"},
+      {"id" => "c2", "error" => "conflict"}
+    ]
+    allow(@db.couchrest_database).to receive(:bulk_save).with(docs).and_return(result)
+
+    actual = @db.bulk_save(docs, false)
+    expect(c1._rev).to eq("2-ccc")
+    expect(c2._rev).to eq("1-bbb")
+    expect(actual).to eq(result)
   end
 end
 

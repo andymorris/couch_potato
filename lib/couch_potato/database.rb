@@ -100,6 +100,52 @@ module CouchPotato
     end
     alias_method :destroy, :destroy_document
 
+    # Saves multiple documents in one request. Returns false if validate is true and validations
+    # fail, or the couchdb result if the request is made. The couchdb result includes 'ok' or
+    # 'error' results for each document, as some may succeed and others may fail. Retries should
+    # be handled by the caller if any fail due to conflicts.
+    def bulk_save(documents, validate = true)
+      if validate
+        documents.each do |document|
+          document.errors.clear
+
+          return false if false == document.run_callbacks(:validation_on_save) do
+            callback = document.new? ? :validation_on_create : :validation_on_update
+            return false if false == document.run_callbacks(callback) do
+              return false unless valid_document?(document)
+            end
+          end
+        end
+      end
+
+      # Run before_save/create/update callbacks, but not after_ and around_
+      docs_to_save = []
+      documents.each do |document|
+        document.run_callbacks(:save) do
+          callback = document.new? ? :create : :update
+          document.run_callbacks(callback) do
+            if document.new? || document.dirty?
+              docs_to_save << document
+            end
+            # Prevent after_create/update callbacks from executing
+            false
+          end
+          # Prevent after_save callbacks from executing
+          false
+        end
+      end
+
+      results = couchrest_database.bulk_save docs_to_save
+      results.each do |result|
+        if result["ok"]
+          document = docs_to_save.find {|d| d.id == result["id"]}
+          document._rev = result["rev"]
+        end
+      end
+
+      results
+    end
+
     # loads a document by its id(s)
     # id - either a single id or an array of ids
     # returns either a single document or an array of documents (if an array of ids was passed).
